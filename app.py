@@ -42,6 +42,16 @@ DEMO_DB = {
     },
 }
 
+SUPPORTED_QUESTIONS = {
+    "Birth place": "Where was Barack Obama born?",
+    "Birth date": "When was Barack Obama born?",
+    "Occupation": "What was Barack Obama's occupation?",
+    "Political party": "Which political party was Barack Obama associated with?",
+    "Spouse": "Who was Barack Obama married to?",
+    "Office held": "What office did Barack Obama hold?",
+    "Education": "Where did Barack Obama study?",
+}
+
 ARTIFACTS = Path("artifacts")
 MODEL_PATH = ARTIFACTS / "kvmemnet_model_final.pt"
 DB_PATH = ARTIFACTS / "data.pkl"
@@ -65,15 +75,19 @@ RELATIONS = {
 
 
 def ensure_model():
+    """Download the trained model from Hugging Face if Streamlit does not have it yet."""
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
+
     if not MODEL_PATH.exists():
         with st.spinner("Downloading trained MemoryGPT model from Hugging Face..."):
             urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+
     return MODEL_PATH
 
 
 @st.cache_resource
 def load_runtime():
+    # data.pkl and vocab.pkl remain in the GitHub artifacts/ folder.
     if not DB_PATH.exists() or not VOCAB_PATH.exists():
         return "demo", DEMO_DB, None, None, (
             "data.pkl or vocab.pkl is missing from the artifacts folder."
@@ -85,6 +99,7 @@ def load_runtime():
         with DB_PATH.open("rb") as handle:
             database = pickle.load(handle)
 
+        # Vocab is imported above so pickle can resolve the class created in Colab.
         with VOCAB_PATH.open("rb") as handle:
             vocab = pickle.load(handle)
 
@@ -106,7 +121,17 @@ def load_runtime():
         return "trained", database, vocab, model, None
 
     except Exception as exc:
+        # Keep the public site alive even if Hugging Face or an artifact temporarily fails.
         return "demo", DEMO_DB, None, None, str(exc)
+
+
+def choose_example(question):
+    st.session_state.question = question
+    st.session_state.run_search = True
+
+
+
+mode, database, vocab, model, load_error = load_runtime()
 
 
 def display_name(person):
@@ -138,13 +163,7 @@ def select_person(person):
     st.session_state.run_search = False
 
 
-mode, database, vocab, model, load_error = load_runtime()
-
-default_person = (
-    "barack obama"
-    if "barack obama" in database
-    else next(iter(database))
-)
+default_person = "barack obama" if "barack obama" in database else next(iter(database))
 
 if "selected_person" not in st.session_state:
     st.session_state.selected_person = default_person
@@ -157,10 +176,11 @@ if "question" not in st.session_state:
 if "run_search" not in st.session_state:
     st.session_state.run_search = False
 
+
 st.title("🧠 MemoryGPT")
 st.caption(
-    "Explore a Key-Value Memory Network trained on structured biography facts. "
-    "Find a person, choose a question, and inspect the model's attention."
+    "Ask a factual question about a person in the model's memory and "
+    "see which memory slot influenced the answer."
 )
 
 with st.sidebar:
@@ -181,25 +201,22 @@ with st.sidebar:
     st.subheader("Find a person")
 
     person_search = st.text_input(
-        "Search people",
-        placeholder="Try: Winston",
+        "Search the memory",
+        placeholder="e.g. Winston",
         label_visibility="collapsed",
     )
 
-    if person_search.strip():
-        needle = person_search.strip().lower()
+    if person_search:
+        needle = person_search.lower().strip()
         matches = [
-            person
-            for person in database.keys()
+            person for person in database
             if needle in str(person).lower()
         ][:50]
 
         if matches:
-            st.caption(f"Found {len(matches)} matching people (showing up to 50).")
-
             selected_match = st.selectbox(
                 "Choose a person",
-                options=matches,
+                matches,
                 format_func=display_name,
                 key="person_match_select",
             )
@@ -208,19 +225,19 @@ with st.sidebar:
                 "Use this person",
                 type="primary",
                 use_container_width=True,
-                key="use_person_button",
             ):
                 select_person(selected_match)
                 st.rerun()
         else:
-            st.warning("No matching person found.")
+            st.caption("No matching person found.")
 
     st.divider()
     st.caption("Currently selected")
     st.success(f"👤 {display_name(st.session_state.selected_person)}")
 
+
 selected_person = st.session_state.selected_person
-questions = make_questions(selected_person)
+SUPPORTED_QUESTIONS = make_questions(selected_person)
 
 st.info(
     "Search for a person in the sidebar, choose them from the dropdown, "
@@ -236,23 +253,24 @@ st.write(
     f"These examples are automatically generated for **{display_name(selected_person)}**."
 )
 
-labels = list(questions.keys())
+labels = list(SUPPORTED_QUESTIONS)
+
 for row_start in range(0, len(labels), 4):
     row_labels = labels[row_start:row_start + 4]
-    cols = st.columns(len(row_labels))
+    columns = st.columns(len(row_labels))
 
-    for col, label in zip(cols, row_labels):
-        with col:
+    for column, label in zip(columns, row_labels):
+        with column:
             st.button(
                 label,
-                key=f"question_button_{label}",
+                key=f"example_{label}",
                 use_container_width=True,
                 on_click=choose_question,
-                args=(questions[label],),
+                args=(SUPPORTED_QUESTIONS[label],),
             )
 
-with st.expander("See the exact questions"):
-    for label, example in questions.items():
+with st.expander("See supported question patterns"):
+    for label, example in SUPPORTED_QUESTIONS.items():
         st.markdown(f"**{label}:** {example}")
 
 st.markdown("### Ask MemoryGPT")
@@ -280,7 +298,7 @@ if should_search:
     cleaned_question = question.strip()
 
     if not cleaned_question:
-        st.warning("Enter a question or choose one of the question buttons.")
+        st.warning("Enter a question or select one of the examples above.")
     else:
         result = (
             trained_answer(cleaned_question, database, vocab, model)
@@ -290,8 +308,8 @@ if should_search:
 
         if result is None:
             st.warning(
-                "MemoryGPT could not match that question to a person in memory. "
-                "Use the sidebar search to select a person first."
+                "I could not identify a person stored in memory. "
+                "Search for a person in the sidebar and use one of the supported question patterns."
             )
         else:
             left, right = st.columns([1.1, 1])
@@ -326,19 +344,17 @@ if should_search:
                 if mode == "trained":
                     st.markdown(
                         "The question is converted into a multi-hot vector. "
-                        "The trained Key-Value Memory Network embeds the question "
-                        "and memory keys, computes attention across relations, "
-                        "combines value embeddings, and selects the highest-scoring value."
+                        "The trained Key-Value Memory Network embeds the question and memory keys, "
+                        "computes attention across relations, combines the value embeddings, "
+                        "and selects the highest-scoring value."
                     )
                 else:
                     st.markdown(
-                        "The fallback preview uses relation-keyword scoring. "
-                        "With `data.pkl` and `vocab.pkl` in GitHub, the app downloads "
-                        "the trained model weights from Hugging Face automatically."
+                        "The fallback public preview uses relation-keyword scoring so the repository "
+                        "runs without the trained artifacts."
                     )
 
 st.divider()
 st.caption(
-    "Built with PyTorch • Key-Value Memory Networks • "
-    "Model weights hosted on Hugging Face"
+    "Built from a PyTorch Key-Value Memory Network trained on structured Wikipedia biography facts."
 )
