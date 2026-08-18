@@ -1,61 +1,41 @@
-# MemoryGPT — Interactive Key-Value Memory Network
+# 🧠 MemoryGPT
 
-MemoryGPT turns a coursework notebook into an interactive portfolio project. Users ask natural-language questions about people, receive an answer from a structured memory store, and inspect the relation-level attention behind the result.
+MemoryGPT is an interactive **Key-Value Memory Network** demo built with **PyTorch** and **Streamlit**. It answers factual biography questions by retrieving information from structured memory and visualizing the model's attention over available relations.
 
-## Highlights
+## Features
 
-- PyTorch Key-Value Memory Network implemented from scratch
-- Natural-language biography questions
-- Entity matching and memory retrieval
-- Attention visualization and memory inspection
-- Automatic demo mode for easy public deployment
-- Automatic trained-model mode when saved artifacts are present
+- Search from a large collection of people stored in memory
+- Select a person and generate supported questions automatically
+- Ask about birth place, birth date, occupation, political party, spouse, office, education, and death date
+- View the model's predicted answer and confidence
+- Inspect attention scores and memory values
+- Trained model weights are hosted on Hugging Face
+
+## Tech Stack
+
+- Python
+- PyTorch
+- Streamlit
+- Pandas
+- Hugging Face
+
+## Live Demo
+
+👉 https://memorygpt-kvmemnet-adib.streamlit.app/
+
+## How it works
+
+The question and stored memory keys are converted into vector representations. The Key-Value Memory Network compares the question with relevant memory slots, applies attention over the stored relations, and uses the resulting representation to retrieve the most likely answer.
 
 ## Run locally
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Deploy with Streamlit Community Cloud
+The app expects `data.pkl` and `vocab.pkl` inside the `artifacts/` directory. The trained `.pt` model is downloaded automatically from Hugging Face when needed.
 
-1. Create a GitHub repository and push these files.
-2. Open Streamlit Community Cloud and select **New app**.
-3. Choose the repository, branch, and `app.py`.
-4. Deploy and copy the public URL into your GitHub About section and LinkedIn post.
+---
 
-The app works immediately in demo mode. For the original trained model, add the three files described in `artifacts/README.md`. Since the full Wikipedia-derived database and model files may be large, Git LFS or a hosted release/download step is preferable.
-
-## Architecture
-
-1. Convert a question, relation keys, and values into multi-hot vectors.
-2. Embed questions and keys through matrix **A**.
-3. Compute attention over memory keys.
-4. Combine embedded values from matrix **B** using the attention distribution.
-5. Score candidate values and return the highest-scoring text answer.
-
-## Example questions
-
-- `When was alexander hamilton born?`
-- `Who was alexander hamilton's spouse?`
-- `What office did margaret thatcher hold?`
-- `Where was barack obama born?`
-
-## Repository structure
-
-```text
-memorygpt-kvmemnet/
-├── app.py
-├── model.py
-├── requirements.txt
-├── artifacts/
-├── notebooks/
-└── .streamlit/
-```
-
-## Limitations
-
-Entity extraction uses exact longest-name matching. The original model was trained on eight biography relations, so paraphrases and unknown people may fail. Demo mode is explicitly a lightweight public preview; trained-model mode uses the neural network from the notebook.
+Built as an interactive demonstration of Key-Value Memory Networks and attention-based retrieval.
